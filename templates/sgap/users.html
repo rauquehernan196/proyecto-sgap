@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Usuarios · SGAP{% endblock %}
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">Administración</p><h1>Usuarios</h1></div></div>
+<section class="panel form-panel">
+  <h2>Agregar usuario</h2>
+  <form method="post" action="{% url 'user_create' %}" class="grid-form">
+    {% csrf_token %}
+    {% for field in form %}<div class="field">{{ field.label_tag }}{{ field }}{{ field.errors }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}</div>{% endfor %}
+    <div class="form-actions"><button class="button primary" type="submit">Crear usuario</button></div>
+  </form>
+</section>
+<section class="panel">
+  <h2>Usuarios registrados</h2>
+  <div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
+    {% for account in users %}<tr><td data-label="Nombre">{{ account.get_full_name|default:"—" }}</td><td data-label="Correo">{{ account.email }}</td><td data-label="Rol">{{ account.get_role_display }}</td><td data-label="Estado">{% if account.is_active %}Habilitado{% else %}Deshabilitado{% endif %}</td><td data-label="Acciones">{% if account.pk != user.pk %}<form method="post" action="{% url 'user_toggle' account.pk %}">{% csrf_token %}<button class="button small subtle" type="submit">{% if account.is_active %}Deshabilitar{% else %}Habilitar{% endif %}</button></form>{% else %}—{% endif %}</td></tr>{% endfor %}
+  </tbody></table></div>
+</section>
+{% endblock %}

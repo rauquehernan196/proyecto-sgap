@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Iniciar sesión · SGAP{% endblock %}
+{% block content %}
+<section class="login-card">
+  <p class="eyebrow">Sistema de Gestión y Autorización de Permisos</p>
+  <h1>Iniciar sesión</h1>
+  <p class="muted">Ingresa con tu correo electrónico y contraseña.</p>
+  {% if debug %}
+  <aside class="demo-credentials" aria-label="Credenciales de prueba">
+    <div class="demo-credentials-heading">
+      <strong>Cuentas de prueba</strong>
+      <span>Solo desarrollo</span>
+    </div>
+    <div class="demo-account"><span>Solicitante</span><code>solicitante@sgap.local</code></div>
+    <div class="demo-account"><span>Aprobador</span><code>aprobador@sgap.local</code></div>
+    <div class="demo-account"><span>Administrador</span><code>admin@sgap.local</code></div>
+    <p>Contraseña para las tres cuentas: <code>demo123</code></p>
+  </aside>
+  {% endif %}
+  {% if form.errors %}<div class="alert error">Correo o contraseña incorrectos, o cuenta deshabilitada.</div>{% endif %}
+  <form method="post">
+    {% csrf_token %}
+    <label for="{{ form.username.id_for_label }}">Correo electrónico</label>
+    {{ form.username }}
+    {{ form.username.errors }}
+    <label for="{{ form.password.id_for_label }}">Contraseña</label>
+    {{ form.password }}
+    {{ form.password.errors }}
+    {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+    <button class="button primary full" type="submit">Entrar</button>
+  </form>
+</section>
+{% endblock %}

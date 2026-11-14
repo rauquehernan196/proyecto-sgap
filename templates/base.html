@@ -1,0 +1,67 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}SGAP{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'sgap/styles.css' %}">
+  <script src="{% static 'sgap/background-videos.js' %}" defer></script>
+  <script src="{% static 'sgap/carousel.js' %}" defer></script>
+</head>
+<body>
+  <div class="video-background" aria-hidden="true">
+    <video class="background-video background-video--first is-active" muted playsinline preload="auto" tabindex="-1">
+      <source src="{% static 'sgap/videos/8102896-hd_1920_1080_25fps.mp4' %}" type="video/mp4">
+    </video>
+    <video class="background-video background-video--second" muted playsinline preload="metadata" tabindex="-1">
+      <source src="{% static 'sgap/videos/6804661-uhd_4096_2160_25fps.mp4' %}" type="video/mp4">
+    </video>
+    <div class="video-wash"></div>
+  </div>
+  <header class="topbar">
+    <a class="brand" href="{% url 'dashboard' %}">
+      <span class="brand-mark" aria-hidden="true">SG</span>
+      <span class="brand-copy">SGAP<small>Gestión de permisos</small></span>
+    </a>
+    {% if user.is_authenticated %}
+    <div class="account">
+      <span class="account-identity">{{ user.get_full_name|default:user.email }}<small>{% if user.is_administrator %}Administrador{% else %}{{ user.get_role_display }}{% endif %}</small></span>
+      <form method="post" action="{% url 'switch_session' %}">{% csrf_token %}<button class="button subtle" type="submit">Cambiar sesión</button></form>
+      <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="button subtle" type="submit">Cerrar sesión</button></form>
+    </div>
+    {% endif %}
+  </header>
+  <main class="container">
+    {% if user.is_authenticated and user.is_administrator %}
+    <nav class="admin-nav">
+      <a href="{% url 'dashboard' %}">Resumen</a>
+      <a href="{% url 'user_list' %}">Usuarios</a>
+      <a href="{% url 'procedure_list' %}">Procedimientos</a>
+      <a href="{% url 'history_list' %}">Historial</a>
+    </nav>
+    {% endif %}
+    {% for message in messages %}<div class="alert {{ message.tags }}">{{ message }}</div>{% endfor %}
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <a class="footer-brand" href="{% url 'dashboard' %}">SGAP <span>Gestión de permisos</span></a>
+      <p>Solicitudes y autorizaciones, con seguimiento claro.</p>
+      <nav class="footer-links" aria-label="Enlaces del pie de página">
+        {% if user.is_authenticated %}
+        <a href="{% url 'dashboard' %}">Panel</a>
+        {% if user.is_administrator %}
+        <a href="{% url 'user_list' %}">Usuarios</a>
+        <a href="{% url 'procedure_list' %}">Procedimientos</a>
+        <a href="{% url 'history_list' %}">Historial</a>
+        {% endif %}
+        {% else %}
+        <a href="{% url 'login' %}">Iniciar sesión</a>
+        {% endif %}
+      </nav>
+      <small>SGAP · Sistema de Gestión y Autorización de Permisos</small>
+    </div>
+  </footer>
+</body>
+</html>

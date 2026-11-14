@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Nueva solicitud · SGAP{% endblock %}
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">Solicitudes</p><h1>Nueva solicitud</h1></div><a class="button subtle" href="{% url 'dashboard' %}">Volver</a></div>
+<section class="panel form-panel">
+  <form method="post">
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="alert error">{{ form.non_field_errors }}</div>{% endif %}
+    <div class="field">
+      {{ form.procedure.label_tag }}
+      <select name="{{ form.procedure.html_name }}" id="{{ form.procedure.id_for_label }}" onchange="this.form.method='get'; this.form.submit()">
+        {% for procedure in form.procedure.field.queryset %}
+        <option value="{{ procedure.pk }}" {% if selected_procedure.pk == procedure.pk %}selected{% endif %}>{{ procedure.name }}</option>
+        {% endfor %}
+      </select>
+      {{ form.procedure.errors }}
+    </div>
+    {% if selected_procedure %}
+      {% for field in form %}
+        {% if field.name != "procedure" %}
+        <div class="field">{{ field.label_tag }}{{ field }}{{ field.errors }}</div>
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+    <div class="form-actions"><button class="button primary" type="submit">Enviar solicitud</button></div>
+  </form>
+</section>
+<script src="{% static 'sgap/form-inputs.js' %}" defer></script>
+{% endblock %}

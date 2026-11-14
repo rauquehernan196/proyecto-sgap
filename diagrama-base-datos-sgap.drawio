@@ -1,0 +1,42 @@
+<mxfile host="app.diagrams.net" modified="2026-11-14T14:46:34.329-03:00" agent="Copilot" version="24.7.17" type="device">
+  <diagram id="sgap-database" name="Base de datos SGAP">
+    <mxGraphModel dx="1200" dy="850" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="user" value="&lt;b&gt;sgap_user&lt;/b&gt;&lt;hr&gt;&lt;b&gt;PK&lt;/b&gt; id BIGINT&lt;br&gt;&lt;b&gt;UK&lt;/b&gt; email VARCHAR(254)&lt;br&gt;first_name VARCHAR(150)&lt;br&gt;last_name VARCHAR(150)&lt;br&gt;role VARCHAR(20)&lt;br&gt;password VARCHAR(128)&lt;br&gt;is_active BOOLEAN&lt;br&gt;is_staff BOOLEAN&lt;br&gt;is_superuser BOOLEAN&lt;br&gt;date_joined DATETIME&lt;br&gt;last_login DATETIME NULL" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e8def8;strokeColor=#674783;fontSize=12;align=left;verticalAlign=top;spacingLeft=12;spacingTop=10;" vertex="1" parent="1">
+          <mxGeometry x="40" y="170" width="290" height="300" as="geometry"/>
+        </mxCell>
+        <mxCell id="procedure" value="&lt;b&gt;sgap_procedure&lt;/b&gt;&lt;hr&gt;&lt;b&gt;PK&lt;/b&gt; id BIGINT&lt;br&gt;&lt;b&gt;UK&lt;/b&gt; name VARCHAR(120)&lt;br&gt;fields JSON&lt;br&gt;active BOOLEAN" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;align=left;verticalAlign=top;spacingLeft=12;spacingTop=10;" vertex="1" parent="1">
+          <mxGeometry x="440" y="40" width="300" height="170" as="geometry"/>
+        </mxCell>
+        <mxCell id="request" value="&lt;b&gt;sgap_permissionrequest&lt;/b&gt;&lt;hr&gt;&lt;b&gt;PK&lt;/b&gt; id BIGINT&lt;br&gt;&lt;b&gt;FK&lt;/b&gt; requester_id BIGINT NOT NULL&lt;br&gt;&lt;b&gt;FK&lt;/b&gt; procedure_id BIGINT NOT NULL&lt;br&gt;&lt;b&gt;FK&lt;/b&gt; resolved_by_id BIGINT NULL&lt;br&gt;details JSON&lt;br&gt;status VARCHAR(12)&lt;br&gt;created_at DATETIME&lt;br&gt;updated_at DATETIME&lt;br&gt;&lt;i&gt;Estados: Pendiente, Aprobada, Rechazada, Cancelada&lt;/i&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;align=left;verticalAlign=top;spacingLeft=12;spacingTop=10;" vertex="1" parent="1">
+          <mxGeometry x="440" y="300" width="340" height="270" as="geometry"/>
+        </mxCell>
+        <mxCell id="audit" value="&lt;b&gt;sgap_auditlog&lt;/b&gt;&lt;hr&gt;&lt;b&gt;PK&lt;/b&gt; id BIGINT&lt;br&gt;&lt;b&gt;FK&lt;/b&gt; actor_id BIGINT NULL&lt;br&gt;action VARCHAR(80)&lt;br&gt;reference VARCHAR(120)&lt;br&gt;details TEXT&lt;br&gt;created_at DATETIME" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=top;spacingLeft=12;spacingTop=10;" vertex="1" parent="1">
+          <mxGeometry x="850" y="170" width="290" height="210" as="geometry"/>
+        </mxCell>
+        <mxCell id="note" value="SQLite: db.sqlite3&lt;br&gt;Las tablas de autenticación y sesiones propias de Django no se muestran.&lt;br&gt;FK requester y procedure usan protección contra borrado; resolved_by y actor aceptan NULL." style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;size=15;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;align=left;verticalAlign=top;spacingLeft=8;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="850" y="430" width="290" height="130" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-requester" value="requester_id: 1 cuenta a muchas solicitudes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERone;endArrow=ERmany;startFill=0;endFill=0;strokeColor=#674783;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.35;entryX=0;entryY=0.25;" edge="1" parent="1" source="user" target="request">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-resolver" value="resolved_by_id: opcional; una cuenta puede resolver muchas" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERzeroToOne;endArrow=ERzeroToMany;startFill=0;endFill=0;strokeColor=#a84b56;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.8;entryX=0;entryY=0.8;" edge="1" parent="1" source="user" target="request">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="370" y="430"/>
+              <mxPoint x="400" y="430"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge-procedure" value="procedure_id: un procedimiento tiene muchas solicitudes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERone;endArrow=ERmany;startFill=0;endFill=0;strokeColor=#548235;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="procedure" target="request">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-actor" value="actor_id: opcional; una cuenta genera muchos registros" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;startArrow=ERzeroToOne;endArrow=ERzeroToMany;startFill=0;endFill=0;strokeColor=#6c8ebf;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.7;entryX=0;entryY=0.55;" edge="1" parent="1" source="user" target="audit">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

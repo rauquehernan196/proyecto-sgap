@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Procedimientos · SGAP{% endblock %}
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">Administración</p><h1>Procedimientos</h1></div></div>
+<section class="panel form-panel">
+  <h2>Agregar procedimiento</h2>
+  <form method="post" action="{% url 'procedure_create' %}" class="grid-form">
+    {% csrf_token %}
+    {% for field in form %}<div class="field">{{ field.label_tag }}{{ field }}{{ field.errors }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}</div>{% endfor %}
+    <div class="form-actions"><button class="button primary" type="submit">Guardar procedimiento</button></div>
+  </form>
+</section>
+<section class="panel">
+  <h2>Procedimientos configurados</h2>
+  <div class="table-wrap"><table><thead><tr><th>Procedimiento</th><th>Campos</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
+    {% for procedure in procedures %}<tr><td data-label="Procedimiento">{{ procedure.name }}</td><td data-label="Campos">{{ procedure.fields|join:", " }}</td><td data-label="Estado">{% if procedure.active %}Habilitado{% else %}Deshabilitado{% endif %}</td><td data-label="Acciones"><form method="post" action="{% url 'procedure_toggle' procedure.pk %}">{% csrf_token %}<button class="button small subtle" type="submit">{% if procedure.active %}Deshabilitar{% else %}Habilitar{% endif %}</button></form></td></tr>{% endfor %}
+  </tbody></table></div>
+</section>
+{% endblock %}

@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% load sgap_extras %}
+{% block title %}Panel · SGAP{% endblock %}
+{% block content %}
+<section class="dashboard-hero">
+  <div class="dashboard-hero-copy">
+    <p class="hero-kicker">SGAP · Panel de control</p>
+    {% if role == "Solicitante" %}
+    <h1>Mis solicitudes</h1>
+    <p class="hero-description">Consulta todos tus trámites y revisa si cada permiso fue autorizado o denegado.</p>
+    {% elif role == "Aprobador" %}
+    <h1>Solicitudes pendientes</h1>
+    <p class="hero-description">Revisa cada caso y registra una decisión con claridad.</p>
+    {% else %}
+    <h1>Gestión centralizada</h1>
+    <p class="hero-description">Usuarios, procedimientos e historial, organizados en un solo panel.</p>
+    {% endif %}
+  </div>
+  {% if role == "Solicitante" %}
+  <a class="button hero-button" href="{% url 'request_create' %}">Nueva solicitud <span aria-hidden="true">→</span></a>
+  {% elif role == "Administrador" %}
+  <a class="button hero-button" href="{% url 'procedure_list' %}">Ver procedimientos <span aria-hidden="true">→</span></a>
+  {% endif %}
+</section>
+<section class="dashboard-ribbon">
+  <h2>Permisos con seguimiento claro</h2>
+  <p>Solicitudes, decisiones e historial en un mismo espacio de trabajo.</p>
+</section>
+
+{% if role == "Solicitante" %}
+<section class="procedure-carousel" data-carousel aria-labelledby="procedure-carousel-title">
+  <div class="carousel-heading">
+    <div>
+      <p class="eyebrow">Trámites disponibles</p>
+      <h2 id="procedure-carousel-title">Elige un procedimiento</h2>
+    </div>
+    <div class="carousel-controls">
+      <button class="carousel-control" type="button" data-carousel-prev aria-label="Ver procedimientos anteriores" aria-controls="procedure-track" disabled>←</button>
+      <button class="carousel-control" type="button" data-carousel-next aria-label="Ver más procedimientos" aria-controls="procedure-track">→</button>
+    </div>
+  </div>
+  <div class="carousel-track" id="procedure-track" data-carousel-track tabindex="0" aria-label="Procedimientos habilitados">
+    {% for procedure in available_procedures %}
+    <article class="procedure-card">
+      <span class="procedure-card-number">{{ forloop.counter|stringformat:"02d" }}</span>
+      <h3>{{ procedure.name }}</h3>
+      <ul>{% for field in procedure.fields %}<li>{{ field }}</li>{% endfor %}</ul>
+      <a class="procedure-card-link" href="{% url 'request_create' %}?procedure={{ procedure.pk }}">Iniciar solicitud <span aria-hidden="true">→</span></a>
+    </article>
+    {% empty %}
+    <p class="empty">No hay procedimientos habilitados.</p>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% if role == "Administrador" %}
+<section class="stats">
+  {% status_labels as statuses %}
+  {% for status, label in statuses %}
+  <article class="stat"><span>{{ label }}</span><strong>{{ counts|get_item:status|default:0 }}</strong></article>
+  {% endfor %}
+</section>
+<section class="panel">
+  <div class="panel-heading"><h2>Actividad reciente</h2><a href="{% url 'history_list' %}">Ver historial</a></div>
+  {% if recent_history %}
+  <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Acción</th><th>Referencia</th><th>Detalle</th></tr></thead><tbody>
+  {% for entry in recent_history %}<tr><td data-label="Fecha">{{ entry.created_at|date:"d/m/Y H:i" }}</td><td data-label="Acción">{{ entry.action }}</td><td data-label="Referencia">{{ entry.reference }}</td><td data-label="Detalle">{{ entry.details }}</td></tr>{% endfor %}
+  </tbody></table></div>
+  {% else %}<p class="empty">Todavía no hay actividad registrada.</p>{% endif %}
+</section>
+{% else %}
+<section class="panel">
+  {% if requests %}
+  <div class="table-wrap"><table><thead><tr>
+    {% if role == "Aprobador" %}<th>N.º</th><th>Solicitante</th>{% else %}<th>N.º</th>{% endif %}
+    <th>Procedimiento</th><th>Detalle</th><th>Fecha</th><th>{% if role == "Solicitante" %}Resultado{% else %}Estado{% endif %}</th>
+    {% if role == "Aprobador" %}<th>Acciones</th>{% else %}<th>Resuelta por</th><th></th>{% endif %}
+  </tr></thead><tbody>
+  {% for item in requests %}<tr>
+    <td data-label="N.º">{{ item.code }}</td>
+    {% if role == "Aprobador" %}<td data-label="Solicitante">{{ item.requester.get_full_name|default:item.requester.email }}</td>{% endif %}
+    <td data-label="Procedimiento">{{ item.procedure.name }}</td>
+    <td data-label="Detalle"><ul class="detail-list">{% for label, value in item.details.items %}<li><strong>{{ label }}:</strong> {{ value }}</li>{% endfor %}</ul></td>
+    <td data-label="Fecha">{{ item.created_at|date:"d/m/Y H:i" }}</td>
+    <td data-label="{% if role == 'Solicitante' %}Resultado{% else %}Estado{% endif %}">
+      <span class="badge status-{{ item.status|slugify }}">
+        {% if role == "Solicitante" and item.status == "Aprobada" %}Autorizado
+        {% elif role == "Solicitante" and item.status == "Rechazada" %}Denegado
+        {% else %}{{ item.get_status_display }}{% endif %}
+      </span>
+    </td>
+    {% if role == "Aprobador" %}
+    <td data-label="Acciones"><div class="inline-actions">
+      <form method="post" action="{% url 'request_resolve' item.pk %}">{% csrf_token %}<input type="hidden" name="decision" value="Aprobada"><button class="button small success" type="submit">Aprobar</button></form>
+      <form method="post" action="{% url 'request_resolve' item.pk %}">{% csrf_token %}<input type="hidden" name="decision" value="Rechazada"><button class="button small danger" type="submit">Rechazar</button></form>
+    </div></td>
+    {% else %}
+    <td data-label="Resuelta por">{{ item.resolved_by|default:"—" }}</td>
+    <td data-label="Acciones">{% if item.status == "Pendiente" %}<form method="post" action="{% url 'request_cancel' item.pk %}">{% csrf_token %}<button class="button small subtle" type="submit">Cancelar</button></form>{% else %}—{% endif %}</td>
+    {% endif %}
+  </tr>{% endfor %}
+  </tbody></table></div>
+  {% else %}
+    {% if role == "Aprobador" %}<p class="empty">No hay solicitudes pendientes.</p>{% else %}<p class="empty">Aún no has enviado solicitudes. <a href="{% url 'request_create' %}">Crear una solicitud</a>.</p>{% endif %}
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}
