@@ -95,6 +95,9 @@ class PermissionRequest(models.Model):
         verbose_name="procedimiento",
     )
     details = models.JSONField("detalle", default=dict)
+    rejection_reason = models.TextField(
+        "motivo de rechazo", blank=True, null=True, default=None
+    )
     status = models.CharField(
         "estado", max_length=12, choices=Status.choices, default=Status.PENDING
     )

@@ -1,5 +1,4 @@
 {% extends "base.html" %}
-{% load static %}
 {% block title %}Nueva solicitud · SGAP{% endblock %}
 {% block content %}
 <div class="page-heading"><div><p class="eyebrow">Solicitudes</p><h1>Nueva solicitud</h1></div><a class="button subtle" href="{% url 'dashboard' %}">Volver</a></div>
@@ -26,5 +25,4 @@
     <div class="form-actions"><button class="button primary" type="submit">Enviar solicitud</button></div>
   </form>
 </section>
-<script src="{% static 'sgap/form-inputs.js' %}" defer></script>
 {% endblock %}

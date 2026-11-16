@@ -1,8 +1,8 @@
-import re
-from datetime import datetime
+from datetime import date, datetime
 
 from django import forms
 from django.contrib.auth.password_validation import validate_password
+from django.utils import timezone
 
 from .models import PermissionRequest, Procedure, User
 
@@ -95,17 +95,24 @@ class RequestCreateForm(forms.Form):
             for index, field_label in enumerate(procedure.fields):
                 normalized_label = field_label.strip().casefold()
                 if normalized_label == "fecha y hora":
-                    self.fields[f"detail_{index}"] = forms.CharField(
+                    self.fields[f"detail_{index}"] = forms.DateTimeField(
                         label=field_label,
-                        max_length=16,
-                        widget=forms.TextInput(
-                            attrs={
-                                "placeholder": "DD/MM/AAAA HH:MM",
-                                "inputmode": "numeric",
-                                "autocomplete": "off",
-                                "data-datetime-mask": "true",
-                            }
+                        input_formats=["%Y-%m-%dT%H:%M"],
+                        error_messages={"invalid": "Ingresa una fecha y hora válidas."},
+                        widget=forms.DateTimeInput(
+                            attrs={"type": "datetime-local", "step": "60"}
                         ),
+                    )
+                elif (
+                    normalized_label == "fecha"
+                    or normalized_label.startswith("fecha ")
+                    or normalized_label.startswith("fecha(")
+                ):
+                    self.fields[f"detail_{index}"] = forms.DateField(
+                        label=field_label,
+                        input_formats=["%Y-%m-%d"],
+                        error_messages={"invalid": "Ingresa una fecha válida."},
+                        widget=forms.DateInput(attrs={"type": "date"}),
                     )
                 elif normalized_label == "área":
                     self.fields[f"detail_{index}"] = forms.ChoiceField(
@@ -126,33 +133,39 @@ class RequestCreateForm(forms.Form):
         if self.selected_procedure and chosen != self.selected_procedure:
             self.add_error("procedure", "Selecciona un procedimiento válido.")
         if self.selected_procedure:
-            for index, label in enumerate(self.selected_procedure.fields):
+            now = timezone.now()
+            today = timezone.localdate()
+            for index, _label in enumerate(self.selected_procedure.fields):
                 field_name = f"detail_{index}"
                 value = cleaned_data.get(field_name)
-                if label.strip().casefold() != "fecha y hora" or value is None:
-                    continue
-                if not re.fullmatch(r"\d{2}/\d{2}/\d{4} \d{2}:\d{2}", value):
-                    self.add_error(
-                        field_name,
-                        "Usa el formato DD/MM/AAAA HH:MM.",
-                    )
-                    continue
-                try:
-                    datetime.strptime(value, "%d/%m/%Y %H:%M")
-                except ValueError:
-                    self.add_error(
-                        field_name,
-                        "Ingresa una fecha y hora válidas.",
-                    )
+                field = self.fields[field_name]
+                if isinstance(field, forms.DateTimeField) and value is not None:
+                    if value < now:
+                        self.add_error(
+                            field_name,
+                            "La fecha y hora no pueden ser anteriores al momento actual.",
+                        )
+                elif isinstance(field, forms.DateField) and value is not None:
+                    if value < today:
+                        self.add_error(
+                            field_name, "La fecha no puede ser anterior a hoy."
+                        )
         return cleaned_data
 
     def detail_values(self):
         if not self.is_valid() or self.selected_procedure is None:
             return {}
-        return {
-            label: self.cleaned_data[f"detail_{index}"].strip()
-            for index, label in enumerate(self.selected_procedure.fields)
-        }
+        details = {}
+        for index, label in enumerate(self.selected_procedure.fields):
+            value = self.cleaned_data[f"detail_{index}"]
+            if isinstance(value, datetime):
+                value = value.strftime("%d/%m/%Y %H:%M")
+            elif isinstance(value, date):
+                value = value.strftime("%d/%m/%Y")
+            else:
+                value = value.strip()
+            details[label] = value
+        return details
 
 
 class RequestDecisionForm(forms.Form):
@@ -162,3 +175,17 @@ class RequestDecisionForm(forms.Form):
             (PermissionRequest.Status.REJECTED, "Rechazar"),
         )
     )
+    rejection_reason = forms.CharField(
+        label="Motivo del rechazo",
+        required=False,
+        max_length=2000,
+        strip=True,
+        error_messages={
+            "max_length": "El motivo no puede superar los 2000 caracteres."
+        },
+        widget=forms.Textarea(attrs={"rows": 2}),
+    )
+
+    def clean_rejection_reason(self):
+        reason = self.cleaned_data["rejection_reason"]
+        return reason or None

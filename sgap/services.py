@@ -34,7 +34,7 @@ def create_request(requester, procedure, details):
 
 
 @transaction.atomic
-def resolve_request(request_id, approver, approved):
+def resolve_request(request_id, approver, approved, rejection_reason=None):
     if approver.role != User.Role.APPROVER:
         raise PermissionDenied("Solo un aprobador puede resolver solicitudes.")
     permission_request = PermissionRequest.objects.select_for_update().filter(
@@ -50,8 +50,19 @@ def resolve_request(request_id, approver, approved):
         if approved
         else PermissionRequest.Status.REJECTED
     )
+    if approved or not rejection_reason:
+        permission_request.rejection_reason = None
+    else:
+        permission_request.rejection_reason = rejection_reason.strip() or None
     permission_request.resolved_by = approver
-    permission_request.save(update_fields=["status", "resolved_by", "updated_at"])
+    permission_request.save(
+        update_fields=[
+            "status",
+            "rejection_reason",
+            "resolved_by",
+            "updated_at",
+        ]
+    )
     action = "Solicitud aprobada" if approved else "Solicitud rechazada"
     record_audit(action, permission_request.code, f"Decisión de {approver}", approver)
     return permission_request
