@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="{% static 'sgap/styles.css' %}">
   <script src="{% static 'sgap/background-videos.js' %}" defer></script>
   <script src="{% static 'sgap/carousel.js' %}" defer></script>
+  <script src="{% static 'sgap/notifications.js' %}" defer></script>
 </head>
 <body>
   <div class="video-background" aria-hidden="true">
@@ -19,6 +20,21 @@
     </video>
     <div class="video-wash"></div>
   </div>
+  {% if messages or user.is_authenticated %}
+  <div class="flash-messages" aria-live="polite" aria-relevant="additions" {% if user.is_authenticated %}data-poll-url="{% url 'notification_poll' %}"{% endif %}>
+    {% for message in messages %}
+    <div class="alert {{ message.tags }}" role="{% if message.tags == 'error' %}alert{% else %}status{% endif %}">
+      {% if user.is_authenticated %}
+      <a class="notification-link" href="{% url 'dashboard' %}#{% if user.is_administrator %}recent-activity{% elif user.role == 'Aprobador' %}pending-requests{% else %}my-requests{% endif %}">
+        <span>{{ message }}</span>
+        <span class="notification-action">{% if user.is_administrator %}Ver actividad reciente{% elif user.role == "Aprobador" %}Ver solicitudes para aprobar{% else %}Ver mis solicitudes{% endif %} →</span>
+      </a>
+      {% else %}<span>{{ message }}</span>{% endif %}
+      <button class="notification-dismiss" type="button" aria-label="Cerrar notificación">×</button>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
   <header class="topbar">
     <a class="brand" href="{% url 'dashboard' %}">
       <span class="brand-mark" aria-hidden="true">SG</span>
@@ -34,14 +50,13 @@
   </header>
   <main class="container">
     {% if user.is_authenticated and user.is_administrator %}
-    <nav class="admin-nav">
-      <a href="{% url 'dashboard' %}">Resumen</a>
-      <a href="{% url 'user_list' %}">Usuarios</a>
-      <a href="{% url 'procedure_list' %}">Procedimientos</a>
-      <a href="{% url 'history_list' %}">Historial</a>
+    <nav class="admin-nav" aria-label="Navegación de administración">
+      <a href="{% url 'dashboard' %}"{% if request.resolver_match.url_name == "dashboard" %} aria-current="page"{% endif %}>Resumen</a>
+      <a href="{% url 'user_list' %}"{% if request.resolver_match.url_name == "user_list" or request.resolver_match.url_name == "user_create" or request.resolver_match.url_name == "user_toggle" %} aria-current="page"{% endif %}>Usuarios</a>
+      <a href="{% url 'procedure_list' %}"{% if request.resolver_match.url_name == "procedure_list" or request.resolver_match.url_name == "procedure_create" or request.resolver_match.url_name == "procedure_toggle" %} aria-current="page"{% endif %}>Procedimientos</a>
+      <a href="{% url 'history_list' %}"{% if request.resolver_match.url_name == "history_list" or request.resolver_match.url_name == "history_export" %} aria-current="page"{% endif %}>Historial</a>
     </nav>
     {% endif %}
-    {% for message in messages %}<div class="alert {{ message.tags }}">{{ message }}</div>{% endfor %}
     {% block content %}{% endblock %}
   </main>
   <footer class="site-footer">

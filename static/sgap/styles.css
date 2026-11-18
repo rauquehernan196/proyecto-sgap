@@ -53,6 +53,22 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .video-wash { position: absolute; inset: 0; background: rgb(255 255 255 / 24%); }
 .topbar, .container { position: relative; z-index: 1; }
 
+.flash-messages {
+  position: fixed;
+  z-index: 10;
+  top: 88px;
+  right: max(24px, calc((100% - 1240px) / 2));
+  width: min(420px, calc(100% - 32px));
+  margin: 0;
+  pointer-events: none;
+}
+.flash-messages .alert { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px; box-shadow: 0 10px 28px rgb(25 38 52 / 18%); pointer-events: auto; animation: notification-enter .2s ease-out; }
+.notification-link { display: grid; flex: 1 1 auto; gap: 7px; color: inherit; }
+.notification-link:hover { color: inherit; text-decoration: none; }
+.notification-action { font-size: 12px; font-weight: 750; text-decoration: underline; text-underline-offset: 2px; }
+.notification-dismiss { flex: 0 0 auto; padding: 0 3px; border: 0; background: transparent; color: currentColor; font-size: 20px; line-height: 1; cursor: pointer; }
+.notification-dismiss:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+@keyframes notification-enter { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
 .topbar {
   min-height: 72px;
   display: flex;
@@ -100,6 +116,7 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 }
 .admin-nav a { flex: 0 0 auto; padding: 9px 15px; border-radius: 999px; color: var(--muted); font-size: 13px; font-weight: 600; }
 .admin-nav a:hover { background: #eaf0f5; color: var(--ink); text-decoration: none; }
+.admin-nav a[aria-current="page"] { background: #eaf0f5; color: var(--blue-dark); }
 
 .dashboard-hero {
   position: relative;
@@ -245,6 +262,9 @@ td { overflow-wrap: anywhere; }
 .button.small { min-height: 35px; padding: 6px 11px; font-size: 12px; }
 .button.full { width: 100%; margin-top: 14px; }
 .inline-actions { flex-wrap: wrap; gap: 7px; }
+.rejection-form { display: grid; gap: 6px; min-width: 180px; }
+.rejection-form label { color: var(--muted); font-size: 11px; font-weight: 650; }
+.rejection-form textarea { width: 100%; min-height: 52px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: rgb(255 255 255 / 90%); }
 
 .login-card {
   width: min(460px, 100%);
@@ -314,6 +334,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--b
 
 @media (max-width: 900px) {
   .topbar { padding-right: 24px; padding-left: 24px; }
+  .flash-messages { right: 18px; width: min(420px, calc(100% - 36px)); }
   .container { width: min(100% - 36px, 1240px); margin-top: 28px; }
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dashboard-hero { min-height: 280px; margin-top: -28px; padding-right: 28px; padding-left: 28px; }
@@ -322,6 +343,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--b
 
 @media (max-width: 680px) {
   .topbar { align-items: flex-start; flex-direction: column; gap: 14px; padding: 14px 18px; }
+  .flash-messages { top: 16px; right: 14px; width: calc(100% - 28px); }
   .account { width: 100%; flex-wrap: wrap; gap: 8px; }
   .account-identity { flex: 1 1 100%; margin: 0 0 3px; }
   .container { width: calc(100% - 28px); margin: 22px auto 42px; }
@@ -373,6 +395,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--b
 @media (max-width: 440px) {
   .brand-mark { width: 38px; height: 38px; }
   .brand-copy { font-size: 17px; }
+  .flash-messages { top: 12px; right: 11px; width: calc(100% - 22px); }
   .account { align-items: stretch; }
   .account form { flex: 1 1 auto; }
   .account .button { width: 100%; padding-right: 10px; padding-left: 10px; font-size: 12px; }

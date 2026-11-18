@@ -5,9 +5,11 @@ from django.contrib import messages
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
 from django.db.models import Count
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from .forms import (
@@ -43,9 +45,113 @@ def role_required(*roles):
     return decorator
 
 
+@transaction.atomic
+def _take_notifications(user):
+    if user.role == User.Role.REQUESTER:
+        notifications = list(
+            PermissionRequest.objects.filter(
+                requester=user,
+                requester_notified=False,
+                status__in=(
+                    PermissionRequest.Status.APPROVED,
+                    PermissionRequest.Status.REJECTED,
+                ),
+            )
+        )
+        field = "requester_notified"
+    elif user.role == User.Role.APPROVER:
+        notifications = list(
+            PermissionRequest.objects.filter(
+                approver_notified=False,
+                status=PermissionRequest.Status.PENDING,
+            ).select_related("requester", "procedure")
+        )
+        field = "approver_notified"
+    elif user.is_administrator:
+        notifications = list(
+            PermissionRequest.objects.filter(
+                admin_notified=False,
+                status__in=(
+                    PermissionRequest.Status.APPROVED,
+                    PermissionRequest.Status.REJECTED,
+                ),
+            ).select_related("resolved_by")
+        )
+        field = "admin_notified"
+    else:
+        return []
+
+    if user.is_administrator:
+        target_url = f'{reverse("dashboard")}#recent-activity'
+        action_label = "Ver actividad reciente"
+    elif user.role == User.Role.APPROVER:
+        target_url = f'{reverse("dashboard")}#pending-requests'
+        action_label = "Ver solicitudes para aprobar"
+    else:
+        target_url = f'{reverse("dashboard")}#my-requests'
+        action_label = "Ver mis solicitudes"
+
+    result = []
+    for item in notifications:
+        if field == "requester_notified":
+            if item.status == PermissionRequest.Status.APPROVED:
+                result.append(
+                    (
+                        messages.SUCCESS,
+                        f"Tu solicitud {item.code} fue aprobada con éxito.",
+                        target_url,
+                        action_label,
+                    )
+                )
+            else:
+                message = f"Tu solicitud {item.code} fue denegada."
+                if item.rejection_reason:
+                    message += f" Motivo: {item.rejection_reason}"
+                result.append((messages.ERROR, message, target_url, action_label))
+        elif field == "approver_notified":
+            requester = item.requester.get_full_name() or item.requester.email
+            result.append(
+                (
+                    messages.INFO,
+                    f"Llegó una nueva solicitud {item.code} de {requester} "
+                    f"para {item.procedure.name}.",
+                    target_url,
+                    action_label,
+                )
+            )
+        else:
+            decision = (
+                "autorizó"
+                if item.status == PermissionRequest.Status.APPROVED
+                else "denegó"
+            )
+            approver = str(item.resolved_by) if item.resolved_by else "El aprobador"
+            level = (
+                messages.SUCCESS
+                if item.status == PermissionRequest.Status.APPROVED
+                else messages.WARNING
+            )
+            result.append(
+                (
+                    level,
+                    f"{approver} {decision} la solicitud {item.code}.",
+                    target_url,
+                    action_label,
+                )
+            )
+
+    if notifications:
+        PermissionRequest.objects.filter(
+            pk__in=[item.pk for item in notifications]
+        ).update(**{field: True})
+    return result
+
+
 @login_required
 def dashboard(request):
     user = request.user
+    for level, message, _, _ in _take_notifications(user):
+        messages.add_message(request, level, message)
     if user.is_administrator:
         counts = {
             item["status"]: item["total"]
@@ -89,6 +195,25 @@ def dashboard(request):
 
 @login_required
 @require_POST
+def notification_poll(request):
+    notifications = _take_notifications(request.user)
+    return JsonResponse(
+        {
+            "notifications": [
+                {
+                    "level": messages.DEFAULT_TAGS.get(level, "info"),
+                    "message": message,
+                    "url": target_url,
+                    "action": action_label,
+                }
+                for level, message, target_url, action_label in notifications
+            ]
+        }
+    )
+
+
+@login_required
+@require_POST
 def switch_session(request):
     logout(request)
     return redirect("login")
@@ -118,7 +243,7 @@ def request_create(request):
             else:
                 messages.success(
                     request,
-                    f"La solicitud {permission_request.code} fue enviada al aprobador.",
+                    f"Solicitud {permission_request.code} realizada con éxito y enviada al aprobador.",
                 )
                 return redirect("dashboard")
     else:
@@ -144,7 +269,10 @@ def request_cancel(request, request_id):
     except ValidationError as error:
         messages.error(request, error.messages[0])
     else:
-        messages.success(request, f"La solicitud {permission_request.code} fue cancelada.")
+        messages.success(
+            request,
+            f"Solicitud {permission_request.code} cancelada con éxito.",
+        )
     return redirect("dashboard")
 
 
@@ -157,12 +285,19 @@ def request_resolve(request, request_id):
         return redirect("dashboard")
     approved = form.cleaned_data["decision"] == PermissionRequest.Status.APPROVED
     try:
-        permission_request = resolve_request(request_id, request.user, approved)
+        permission_request = resolve_request(
+            request_id,
+            request.user,
+            approved,
+            form.cleaned_data["rejection_reason"],
+        )
     except ValidationError as error:
         messages.error(request, error.messages[0])
     else:
-        status = permission_request.get_status_display().lower()
-        messages.success(request, f"La solicitud {permission_request.code} fue {status}.")
+        status = "aprobada con éxito" if approved else "denegada"
+        messages.success(
+            request, f"La solicitud {permission_request.code} fue {status}."
+        )
     return redirect("dashboard")
 
 

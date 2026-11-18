@@ -1,9 +1,11 @@
+from datetime import timedelta
 from io import StringIO
 
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from .models import AuditLog, PermissionRequest, Procedure, User
 
@@ -72,23 +74,164 @@ class SgapWorkflowTests(TestCase):
 
     def test_requester_creates_dynamic_request_and_it_is_audited(self):
         self.client.force_login(self.requester)
+        requested_date = timezone.localdate()
         response = self.client.post(
             reverse("request_create"),
             {
                 "procedure": self.procedure.pk,
                 "detail_0": "Consulta médica",
-                "detail_1": "2026-11-20",
+                "detail_1": requested_date.isoformat(),
             },
         )
 
-        self.assertRedirects(response, reverse("dashboard"))
+        self.assertRedirects(
+            response,
+            reverse("dashboard"),
+            fetch_redirect_response=False,
+        )
         permission_request = PermissionRequest.objects.get()
         self.assertEqual(
             permission_request.details,
-            {"Motivo": "Consulta médica", "Fecha solicitada": "2026-11-20"},
+            {
+                "Motivo": "Consulta médica",
+                "Fecha solicitada": requested_date.strftime("%d/%m/%Y"),
+            },
         )
         self.assertEqual(permission_request.status, PermissionRequest.Status.PENDING)
+        self.assertFalse(permission_request.approver_notified)
         self.assertEqual(AuditLog.objects.get().action, "Solicitud creada")
+        dashboard = self.client.get(reverse("dashboard"))
+        self.assertContains(
+            dashboard,
+            f"Solicitud {permission_request.code} realizada con éxito y enviada al aprobador.",
+        )
+        self.assertLess(
+            dashboard.content.index(b'class="flash-messages"'),
+            dashboard.content.index(b'<header class="topbar">'),
+        )
+        self.assertContains(dashboard, 'class="alert success"')
+        self.assertContains(dashboard, "notifications.js")
+        self.assertContains(
+            dashboard, f'href="{reverse("dashboard")}#my-requests"'
+        )
+        self.assertContains(dashboard, 'id="my-requests"')
+
+    def test_approver_poll_receives_new_request_once(self):
+        self.client.force_login(self.requester)
+        self.client.post(
+            reverse("request_create"),
+            {
+                "procedure": self.procedure.pk,
+                "detail_0": "Consulta médica",
+                "detail_1": timezone.localdate().isoformat(),
+            },
+        )
+        permission_request = PermissionRequest.objects.get()
+        self.client.force_login(self.approver)
+
+        response = self.client.post(reverse("notification_poll"))
+
+        self.assertEqual(response.status_code, 200)
+        notification = response.json()["notifications"][0]
+        self.assertEqual(notification["level"], "info")
+        self.assertIn(permission_request.code, notification["message"])
+        self.assertIn("nueva solicitud", notification["message"])
+        self.assertEqual(
+            notification["url"], f'{reverse("dashboard")}#pending-requests'
+        )
+        self.assertEqual(notification["action"], "Ver solicitudes para aprobar")
+        permission_request.refresh_from_db()
+        self.assertTrue(permission_request.approver_notified)
+        self.assertEqual(
+            self.client.post(reverse("notification_poll")).json()["notifications"],
+            [],
+        )
+
+    def test_admin_poll_receives_approver_decisions(self):
+        requests = [
+            PermissionRequest.objects.create(
+                requester=self.requester,
+                procedure=self.procedure,
+                details={"Motivo": "Autorizar"},
+            ),
+            PermissionRequest.objects.create(
+                requester=self.requester,
+                procedure=self.procedure,
+                details={"Motivo": "Denegar"},
+            ),
+        ]
+        self.client.force_login(self.approver)
+        for item, decision in zip(
+            requests,
+            (
+                PermissionRequest.Status.APPROVED,
+                PermissionRequest.Status.REJECTED,
+            ),
+        ):
+            self.client.post(
+                reverse("request_resolve", args=[item.pk]),
+                {"decision": decision},
+            )
+
+        self.client.force_login(self.admin)
+        response = self.client.post(reverse("notification_poll"))
+
+        notifications = response.json()["notifications"]
+        self.assertEqual(len(notifications), 2)
+        self.assertTrue(
+            all(
+                item["url"] == f'{reverse("dashboard")}#recent-activity'
+                for item in notifications
+            )
+        )
+        self.assertTrue(any("autorizó" in item["message"] for item in notifications))
+        self.assertTrue(any("denegó" in item["message"] for item in notifications))
+        for item in requests:
+            item.refresh_from_db()
+            self.assertTrue(item.admin_notified)
+
+    def test_request_form_uses_calendar_and_rejects_invalid_date(self):
+        self.client.force_login(self.requester)
+
+        response = self.client.get(
+            reverse("request_create"), {"procedure": self.procedure.pk}
+        )
+
+        self.assertContains(response, 'type="date"')
+        self.assertContains(
+            response, f'min="{timezone.localdate().isoformat()}"'
+        )
+
+        response = self.client.post(
+            reverse("request_create"),
+            {
+                "procedure": self.procedure.pk,
+                "detail_0": "Consulta médica",
+                "detail_1": "2026-02-31",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(PermissionRequest.objects.exists())
+        self.assertTrue(response.context["form"].has_error("detail_1"))
+
+    def test_request_form_rejects_dates_before_today(self):
+        self.client.force_login(self.requester)
+        yesterday = timezone.localdate() - timedelta(days=1)
+
+        response = self.client.post(
+            reverse("request_create"),
+            {
+                "procedure": self.procedure.pk,
+                "detail_0": "Consulta médica",
+                "detail_1": yesterday.isoformat(),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(PermissionRequest.objects.exists())
+        self.assertTrue(response.context["form"].has_error("detail_1"))
+        self.assertContains(response, "⚠")
 
     def test_restricted_area_request_uses_select_with_configured_choices(self):
         procedure = Procedure.objects.create(
@@ -104,6 +247,7 @@ class SgapWorkflowTests(TestCase):
         self.assertContains(response, '<select name="detail_0"')
         self.assertContains(response, "Sala de servidores / TI")
         self.assertContains(response, "Planta de producción")
+        self.assertContains(response, 'type="datetime-local"')
 
     def test_restricted_area_request_rejects_an_unlisted_area(self):
         procedure = Procedure.objects.create(
@@ -132,6 +276,7 @@ class SgapWorkflowTests(TestCase):
             fields=["Área", "Motivo", "Fecha y hora"],
         )
         self.client.force_login(self.requester)
+        requested_date = timezone.localdate() + timedelta(days=1)
 
         response = self.client.post(
             reverse("request_create"),
@@ -139,14 +284,20 @@ class SgapWorkflowTests(TestCase):
                 "procedure": procedure.pk,
                 "detail_0": "Laboratorio",
                 "detail_1": "Mantenimiento",
-                "detail_2": "11/11/2002 01:23",
+                "detail_2": f"{requested_date.isoformat()}T01:23",
             },
         )
 
         self.assertRedirects(response, reverse("dashboard"))
         permission_request = PermissionRequest.objects.get()
         self.assertEqual(
-            permission_request.details["Fecha y hora"], "11/11/2002 01:23"
+            permission_request.details["Fecha y hora"],
+            f"{requested_date.strftime('%d/%m/%Y')} 01:23",
+        )
+        self.client.force_login(self.requester)
+        response = self.client.get(reverse("dashboard"))
+        self.assertContains(
+            response, f"{requested_date.strftime('%d/%m/%Y')} 01:23"
         )
 
     def test_request_form_rejects_invalid_restricted_access_datetime(self):
@@ -162,13 +313,43 @@ class SgapWorkflowTests(TestCase):
                 "procedure": procedure.pk,
                 "detail_0": "Laboratorio",
                 "detail_1": "Mantenimiento",
-                "detail_2": "31/02/2002 25:90",
+                "detail_2": "2002-02-31T25:90",
             },
         )
 
         self.assertEqual(response.status_code, 200)
         self.assertFalse(PermissionRequest.objects.exists())
         self.assertTrue(response.context["form"].has_error("detail_2"))
+
+    def test_request_form_rejects_datetime_before_today(self):
+        procedure = Procedure.objects.create(
+            name="Acceso restringido",
+            fields=["Área", "Motivo", "Fecha y hora"],
+        )
+        self.client.force_login(self.requester)
+        yesterday = timezone.localdate() - timedelta(days=1)
+
+        response = self.client.get(
+            reverse("request_create"), {"procedure": procedure.pk}
+        )
+        self.assertContains(
+            response, f'min="{timezone.localdate().isoformat()}T00:00"'
+        )
+
+        response = self.client.post(
+            reverse("request_create"),
+            {
+                "procedure": procedure.pk,
+                "detail_0": "Laboratorio",
+                "detail_1": "Mantenimiento",
+                "detail_2": f"{yesterday.isoformat()}T12:00",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(PermissionRequest.objects.exists())
+        self.assertTrue(response.context["form"].has_error("detail_2"))
+        self.assertContains(response, "⚠")
 
     def test_approver_resolves_pending_request(self):
         permission_request = PermissionRequest.objects.create(
@@ -187,6 +368,76 @@ class SgapWorkflowTests(TestCase):
         permission_request.refresh_from_db()
         self.assertEqual(permission_request.status, PermissionRequest.Status.APPROVED)
         self.assertEqual(permission_request.resolved_by, self.approver)
+        self.assertIsNone(permission_request.rejection_reason)
+        self.assertFalse(permission_request.requester_notified)
+
+        self.client.force_login(self.requester)
+        response = self.client.get(reverse("dashboard"))
+        self.assertContains(
+            response,
+            f"Tu solicitud {permission_request.code} fue aprobada con éxito.",
+        )
+        self.assertLess(
+            response.content.index(b'class="flash-messages"'),
+            response.content.index(b'<header class="topbar">'),
+        )
+
+        response = self.client.get(reverse("dashboard"))
+        self.assertNotContains(
+            response,
+            f"Tu solicitud {permission_request.code} fue aprobada con éxito.",
+        )
+
+    def test_approver_can_reject_with_optional_reason(self):
+        permission_request = PermissionRequest.objects.create(
+            requester=self.requester,
+            procedure=self.procedure,
+            details={"Motivo": "Consulta"},
+        )
+        self.client.force_login(self.approver)
+
+        response = self.client.post(
+            reverse("request_resolve", args=[permission_request.pk]),
+            {
+                "decision": PermissionRequest.Status.REJECTED,
+                "rejection_reason": "Falta documentación",
+            },
+        )
+
+        self.assertRedirects(response, reverse("dashboard"))
+        permission_request.refresh_from_db()
+        self.assertEqual(permission_request.status, PermissionRequest.Status.REJECTED)
+        self.assertEqual(permission_request.rejection_reason, "Falta documentación")
+        self.assertIn("Falta documentación", AuditLog.objects.get().details)
+
+        self.client.force_login(self.requester)
+        response = self.client.get(reverse("dashboard"))
+        self.assertContains(response, "Falta documentación")
+        self.assertContains(
+            response, f"Tu solicitud {permission_request.code} fue denegada."
+        )
+        self.assertContains(response, "Motivo: Falta documentación")
+
+    def test_approver_can_reject_without_reason(self):
+        permission_request = PermissionRequest.objects.create(
+            requester=self.requester,
+            procedure=self.procedure,
+            details={"Motivo": "Consulta"},
+        )
+        self.client.force_login(self.approver)
+
+        response = self.client.post(
+            reverse("request_resolve", args=[permission_request.pk]),
+            {
+                "decision": PermissionRequest.Status.REJECTED,
+                "rejection_reason": "   ",
+            },
+        )
+
+        self.assertRedirects(response, reverse("dashboard"))
+        permission_request.refresh_from_db()
+        self.assertEqual(permission_request.status, PermissionRequest.Status.REJECTED)
+        self.assertIsNone(permission_request.rejection_reason)
 
     def test_requester_cannot_cancel_another_users_request(self):
         permission_request = PermissionRequest.objects.create(
@@ -203,6 +454,30 @@ class SgapWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 404)
         permission_request.refresh_from_db()
         self.assertEqual(permission_request.status, PermissionRequest.Status.PENDING)
+
+    def test_flash_messages_render_before_the_navigation_bar(self):
+        permission_request = PermissionRequest.objects.create(
+            requester=self.requester,
+            procedure=self.procedure,
+            details={"Motivo": "Consulta"},
+        )
+        self.client.force_login(self.requester)
+
+        response = self.client.post(
+            reverse("request_cancel", args=[permission_request.pk])
+        )
+
+        self.assertEqual(response.status_code, 302)
+        dashboard = self.client.get(response["Location"])
+
+        self.assertContains(
+            dashboard, f"Solicitud {permission_request.code} cancelada con éxito."
+        )
+        self.assertContains(dashboard, 'class="flash-messages"')
+        self.assertLess(
+            dashboard.content.index(b'class="flash-messages"'),
+            dashboard.content.index(b'<header class="topbar">'),
+        )
 
     def test_requester_dashboard_shows_all_own_results_and_hides_other_users(self):
         PermissionRequest.objects.create(
@@ -278,6 +553,8 @@ class SgapWorkflowTests(TestCase):
                 self.client.force_login(account)
                 response = self.client.get(reverse("dashboard"))
                 self.assertEqual(response.status_code, 200)
+                if account.is_administrator:
+                    self.assertContains(response, 'aria-current="page"')
 
     @override_settings(DEBUG=True, INTERNAL_IPS=["127.0.0.1"])
     def test_login_shows_demo_accounts_in_local_debug_mode(self):

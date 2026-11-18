@@ -98,6 +98,18 @@ class PermissionRequest(models.Model):
     status = models.CharField(
         "estado", max_length=12, choices=Status.choices, default=Status.PENDING
     )
+    rejection_reason = models.TextField(
+        "motivo del rechazo", null=True, blank=True
+    )
+    requester_notified = models.BooleanField(
+        "resultado notificado al solicitante", default=True
+    )
+    approver_notified = models.BooleanField(
+        "nueva solicitud notificada al aprobador", default=True
+    )
+    admin_notified = models.BooleanField(
+        "decisión notificada al administrador", default=True
+    )
     created_at = models.DateTimeField("creada", default=timezone.now)
     updated_at = models.DateTimeField("actualizada", auto_now=True)
     resolved_by = models.ForeignKey(

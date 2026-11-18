@@ -61,7 +61,7 @@
   <article class="stat"><span>{{ label }}</span><strong>{{ counts|get_item:status|default:0 }}</strong></article>
   {% endfor %}
 </section>
-<section class="panel">
+<section class="panel" id="recent-activity">
   <div class="panel-heading"><h2>Actividad reciente</h2><a href="{% url 'history_list' %}">Ver historial</a></div>
   {% if recent_history %}
   <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Acción</th><th>Referencia</th><th>Detalle</th></tr></thead><tbody>
@@ -70,19 +70,19 @@
   {% else %}<p class="empty">Todavía no hay actividad registrada.</p>{% endif %}
 </section>
 {% else %}
-<section class="panel">
+<section class="panel" id="{% if role == 'Aprobador' %}pending-requests{% else %}my-requests{% endif %}">
   {% if requests %}
   <div class="table-wrap"><table><thead><tr>
     {% if role == "Aprobador" %}<th>N.º</th><th>Solicitante</th>{% else %}<th>N.º</th>{% endif %}
-    <th>Procedimiento</th><th>Detalle</th><th>Fecha</th><th>{% if role == "Solicitante" %}Resultado{% else %}Estado{% endif %}</th>
+    <th>Procedimiento</th><th>Detalle</th><th>Fecha de envío</th><th>{% if role == "Solicitante" %}Resultado{% else %}Estado{% endif %}</th>
     {% if role == "Aprobador" %}<th>Acciones</th>{% else %}<th>Resuelta por</th><th></th>{% endif %}
   </tr></thead><tbody>
   {% for item in requests %}<tr>
     <td data-label="N.º">{{ item.code }}</td>
     {% if role == "Aprobador" %}<td data-label="Solicitante">{{ item.requester.get_full_name|default:item.requester.email }}</td>{% endif %}
     <td data-label="Procedimiento">{{ item.procedure.name }}</td>
-    <td data-label="Detalle"><ul class="detail-list">{% for label, value in item.details.items %}<li><strong>{{ label }}:</strong> {{ value }}</li>{% endfor %}</ul></td>
-    <td data-label="Fecha">{{ item.created_at|date:"d/m/Y H:i" }}</td>
+    <td data-label="Detalle"><ul class="detail-list">{% for label, value in item.details.items %}<li><strong>{{ label }}:</strong> {{ value }}</li>{% endfor %}{% if role == "Solicitante" and item.rejection_reason %}<li><strong>Motivo del rechazo:</strong> {{ item.rejection_reason }}</li>{% endif %}</ul></td>
+    <td data-label="Fecha de envío">{{ item.created_at|date:"d/m/Y H:i" }}</td>
     <td data-label="{% if role == 'Solicitante' %}Resultado{% else %}Estado{% endif %}">
       <span class="badge status-{{ item.status|slugify }}">
         {% if role == "Solicitante" and item.status == "Aprobada" %}Autorizado
@@ -93,7 +93,7 @@
     {% if role == "Aprobador" %}
     <td data-label="Acciones"><div class="inline-actions">
       <form method="post" action="{% url 'request_resolve' item.pk %}">{% csrf_token %}<input type="hidden" name="decision" value="Aprobada"><button class="button small success" type="submit">Aprobar</button></form>
-      <form method="post" action="{% url 'request_resolve' item.pk %}">{% csrf_token %}<input type="hidden" name="decision" value="Rechazada"><button class="button small danger" type="submit">Rechazar</button></form>
+      <form method="post" action="{% url 'request_resolve' item.pk %}" class="rejection-form">{% csrf_token %}<input type="hidden" name="decision" value="Rechazada"><label for="rejection-reason-{{ item.pk }}">Motivo (opcional)</label><textarea id="rejection-reason-{{ item.pk }}" name="rejection_reason" rows="2"></textarea><button class="button small danger" type="submit">Rechazar</button></form>
     </div></td>
     {% else %}
     <td data-label="Resuelta por">{{ item.resolved_by|default:"—" }}</td>

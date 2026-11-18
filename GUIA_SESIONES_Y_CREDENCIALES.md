@@ -35,10 +35,10 @@ Con el rol **Solicitante**, selecciona **Nueva solicitud** para pedir autorizaci
 |---|---|
 | Compra de materiales | Materiales requeridos y monto estimado |
 | Viáticos | Destino, fechas del viaje y monto estimado |
-| Permisos | Motivo y fecha(s) solicitada(s) |
-| Acceso a áreas restringidas | Área, motivo y fecha y hora (formato `DD/MM/AAAA HH:MM`) |
+| Permisos | Motivo y fecha(s) solicitada(s), seleccionada(s) en calendario |
+| Acceso a áreas restringidas | Área, motivo y fecha y hora, seleccionadas en calendario |
 
-Completa todos los campos para enviar la solicitud. El **Aprobador** puede revisar las solicitudes pendientes y aprobarlas o rechazarlas. El **Administrador** puede habilitar o deshabilitar procedimientos y agregar otros desde **Procedimientos**; solo los habilitados aparecen para los solicitantes.
+Completa todos los campos para enviar la solicitud. Las fechas y horas se validan en el servidor; las fechas inválidas muestran un error en el formulario. La fecha y hora seleccionadas quedan visibles en el detalle de la solicitud, separadas de la fecha de envío. El **Aprobador** puede revisar las solicitudes pendientes y aprobarlas o rechazarlas; al rechazar, puede escribir un motivo, pero es opcional. Cuando el aprobador resuelve una solicitud, el solicitante recibe un aviso la próxima vez que abra su panel; el aviso aparece una sola vez. El **Administrador** puede habilitar o deshabilitar procedimientos y agregar otros desde **Procedimientos**; solo los habilitados aparecen para los solicitantes.
 
 ### Áreas restringidas disponibles
 
@@ -53,7 +53,7 @@ En el procedimiento **Acceso a áreas restringidas**, selecciona el lugar al que
 - Sala eléctrica
 - Planta de producción
 
-En **Fecha y hora**, escribe los números en orden: día, mes, año, hora y minutos. El formulario agrega automáticamente las barras (`/`), el espacio y los dos puntos (`:`). Por ejemplo: `11/11/2002 01:23`.
+En **Fecha y hora**, usa los selectores de fecha y hora del formulario.
 
 ## Cómo se crea una sesión
 
