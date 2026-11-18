@@ -281,7 +281,10 @@ def request_cancel(request, request_id):
 def request_resolve(request, request_id):
     form = RequestDecisionForm(request.POST)
     if not form.is_valid():
-        messages.error(request, "Selecciona una decisión válida para la solicitud.")
+        if form.has_error("rejection_reason"):
+            messages.error(request, form.errors["rejection_reason"][0])
+        else:
+            messages.error(request, "Selecciona una decisión válida para la solicitud.")
         return redirect("dashboard")
     approved = form.cleaned_data["decision"] == PermissionRequest.Status.APPROVED
     try:

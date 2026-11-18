@@ -74,7 +74,7 @@ class SgapWorkflowTests(TestCase):
 
     def test_requester_creates_dynamic_request_and_it_is_audited(self):
         self.client.force_login(self.requester)
-        requested_date = timezone.localdate()
+        requested_date = timezone.localdate() + timedelta(days=1)
         response = self.client.post(
             reverse("request_create"),
             {
@@ -231,7 +231,7 @@ class SgapWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(PermissionRequest.objects.exists())
         self.assertTrue(response.context["form"].has_error("detail_1"))
-        self.assertContains(response, "⚠")
+        self.assertContains(response, "La fecha no puede ser anterior a hoy.")
 
     def test_restricted_area_request_uses_select_with_configured_choices(self):
         procedure = Procedure.objects.create(
@@ -245,9 +245,9 @@ class SgapWorkflowTests(TestCase):
         )
 
         self.assertContains(response, '<select name="detail_0"')
+        self.assertContains(response, 'type="datetime-local"')
         self.assertContains(response, "Sala de servidores / TI")
         self.assertContains(response, "Planta de producción")
-        self.assertContains(response, 'type="datetime-local"')
 
     def test_restricted_area_request_rejects_an_unlisted_area(self):
         procedure = Procedure.objects.create(
@@ -255,6 +255,7 @@ class SgapWorkflowTests(TestCase):
             fields=["Área", "Motivo", "Fecha y hora"],
         )
         self.client.force_login(self.requester)
+        requested_datetime = timezone.localtime(timezone.now() + timedelta(days=1))
 
         response = self.client.post(
             reverse("request_create"),
@@ -276,7 +277,7 @@ class SgapWorkflowTests(TestCase):
             fields=["Área", "Motivo", "Fecha y hora"],
         )
         self.client.force_login(self.requester)
-        requested_date = timezone.localdate() + timedelta(days=1)
+        requested_datetime = timezone.localtime(timezone.now() + timedelta(days=1))
 
         response = self.client.post(
             reverse("request_create"),
@@ -284,7 +285,7 @@ class SgapWorkflowTests(TestCase):
                 "procedure": procedure.pk,
                 "detail_0": "Laboratorio",
                 "detail_1": "Mantenimiento",
-                "detail_2": f"{requested_date.isoformat()}T01:23",
+                "detail_2": requested_datetime.strftime("%Y-%m-%dT%H:%M"),
             },
         )
 
@@ -292,12 +293,12 @@ class SgapWorkflowTests(TestCase):
         permission_request = PermissionRequest.objects.get()
         self.assertEqual(
             permission_request.details["Fecha y hora"],
-            f"{requested_date.strftime('%d/%m/%Y')} 01:23",
+            requested_datetime.strftime("%d/%m/%Y %H:%M"),
         )
         self.client.force_login(self.requester)
         response = self.client.get(reverse("dashboard"))
         self.assertContains(
-            response, f"{requested_date.strftime('%d/%m/%Y')} 01:23"
+            response, requested_datetime.strftime("%d/%m/%Y %H:%M")
         )
 
     def test_request_form_rejects_invalid_restricted_access_datetime(self):
@@ -320,6 +321,96 @@ class SgapWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(PermissionRequest.objects.exists())
         self.assertTrue(response.context["form"].has_error("detail_2"))
+        self.assertContains(response, "Ingresa una fecha y hora válidas.")
+
+    def test_request_form_uses_calendar_inputs_and_rejects_invalid_date(self):
+        procedure = Procedure.objects.create(
+            name="Permiso con fecha", fields=["Fecha solicitada"]
+        )
+        self.client.force_login(self.requester)
+
+        page = self.client.get(
+            reverse("request_create"), {"procedure": procedure.pk}
+        )
+        self.assertContains(page, 'type="date"')
+
+        response = self.client.post(
+            reverse("request_create"),
+            {"procedure": procedure.pk, "detail_0": "2026-02-31"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(PermissionRequest.objects.exists())
+        self.assertTrue(response.context["form"].has_error("detail_0"))
+        self.assertContains(response, "Ingresa una fecha válida.")
+
+    def test_request_datetime_is_displayed_in_a_readable_format(self):
+        procedure = Procedure.objects.create(
+            name="Permiso con fecha y hora", fields=["Fecha y hora"]
+        )
+        self.client.force_login(self.requester)
+        requested_datetime = timezone.localtime(timezone.now() + timedelta(days=1))
+
+        response = self.client.post(
+            reverse("request_create"),
+            {
+                "procedure": procedure.pk,
+                "detail_0": requested_datetime.strftime("%Y-%m-%dT%H:%M"),
+            },
+        )
+
+        self.assertRedirects(response, reverse("dashboard"))
+        permission_request = PermissionRequest.objects.get()
+        self.assertEqual(
+            permission_request.details["Fecha y hora"],
+            requested_datetime.strftime("%d/%m/%Y %H:%M"),
+        )
+        self.assertContains(
+            self.client.get(reverse("dashboard")),
+            requested_datetime.strftime("%d/%m/%Y %H:%M"),
+        )
+
+    def test_request_form_rejects_a_date_before_today(self):
+        procedure = Procedure.objects.create(
+            name="Permiso con fecha pasada", fields=["Fecha solicitada"]
+        )
+        self.client.force_login(self.requester)
+
+        response = self.client.post(
+            reverse("request_create"),
+            {
+                "procedure": procedure.pk,
+                "detail_0": (timezone.localdate() - timedelta(days=1)).isoformat(),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(PermissionRequest.objects.exists())
+        self.assertTrue(response.context["form"].has_error("detail_0"))
+        self.assertContains(response, "La fecha no puede ser anterior a hoy.")
+
+    def test_request_form_rejects_a_datetime_before_now(self):
+        procedure = Procedure.objects.create(
+            name="Permiso con fecha y hora pasada", fields=["Fecha y hora"]
+        )
+        self.client.force_login(self.requester)
+        past_datetime = timezone.localtime(timezone.now() - timedelta(days=1))
+
+        response = self.client.post(
+            reverse("request_create"),
+            {
+                "procedure": procedure.pk,
+                "detail_0": past_datetime.strftime("%Y-%m-%dT%H:%M"),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(PermissionRequest.objects.exists())
+        self.assertTrue(response.context["form"].has_error("detail_0"))
+        self.assertContains(
+            response,
+            "La fecha y hora no pueden ser anteriores al momento actual.",
+        )
 
     def test_request_form_rejects_datetime_before_today(self):
         procedure = Procedure.objects.create(
@@ -332,8 +423,9 @@ class SgapWorkflowTests(TestCase):
         response = self.client.get(
             reverse("request_create"), {"procedure": procedure.pk}
         )
-        self.assertContains(
-            response, f'min="{timezone.localdate().isoformat()}T00:00"'
+        self.assertRegex(
+            response.content.decode(),
+            rf'min="{timezone.localdate().isoformat()}T\d{{2}}:\d{{2}}"',
         )
 
         response = self.client.post(
@@ -349,7 +441,10 @@ class SgapWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(PermissionRequest.objects.exists())
         self.assertTrue(response.context["form"].has_error("detail_2"))
-        self.assertContains(response, "⚠")
+        self.assertContains(
+            response,
+            "La fecha y hora no pueden ser anteriores al momento actual.",
+        )
 
     def test_approver_resolves_pending_request(self):
         permission_request = PermissionRequest.objects.create(

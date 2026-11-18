@@ -89,11 +89,12 @@
         {% elif role == "Solicitante" and item.status == "Rechazada" %}Denegado
         {% else %}{{ item.get_status_display }}{% endif %}
       </span>
+      {% if role == "Solicitante" and item.rejection_reason %}<small class="rejection-reason">Motivo: {{ item.rejection_reason }}</small>{% endif %}
     </td>
     {% if role == "Aprobador" %}
     <td data-label="Acciones"><div class="inline-actions">
       <form method="post" action="{% url 'request_resolve' item.pk %}">{% csrf_token %}<input type="hidden" name="decision" value="Aprobada"><button class="button small success" type="submit">Aprobar</button></form>
-      <form method="post" action="{% url 'request_resolve' item.pk %}" class="rejection-form">{% csrf_token %}<input type="hidden" name="decision" value="Rechazada"><label for="rejection-reason-{{ item.pk }}">Motivo (opcional)</label><textarea id="rejection-reason-{{ item.pk }}" name="rejection_reason" rows="2"></textarea><button class="button small danger" type="submit">Rechazar</button></form>
+      <form class="rejection-form decision-form" method="post" action="{% url 'request_resolve' item.pk %}">{% csrf_token %}<input type="hidden" name="decision" value="Rechazada"><label class="sr-only" for="rejection-reason-{{ item.pk }}">Motivo del rechazo (opcional)</label><textarea id="rejection-reason-{{ item.pk }}" name="rejection_reason" rows="2" maxlength="2000" placeholder="Motivo del rechazo (opcional)"></textarea><button class="button small danger" type="submit">Rechazar</button></form>
     </div></td>
     {% else %}
     <td data-label="Resuelta por">{{ item.resolved_by|default:"—" }}</td>

@@ -93,24 +93,28 @@ class RequestCreateForm(forms.Form):
         if procedure is not None:
             self.fields["procedure"].initial = procedure
             minimum_date = timezone.localdate().isoformat()
+            minimum_datetime = timezone.localtime().strftime("%Y-%m-%dT%H:%M")
             for index, field_label in enumerate(procedure.fields):
                 normalized_label = field_label.strip().casefold()
                 if normalized_label == "fecha y hora":
                     self.fields[f"detail_{index}"] = forms.DateTimeField(
                         label=field_label,
                         input_formats=["%Y-%m-%dT%H:%M"],
-                        error_messages={
-                            "invalid": "Ingresa una fecha y hora válidas."
-                        },
+                        error_messages={"invalid": "Ingresa una fecha y hora válidas."},
                         widget=forms.DateTimeInput(
                             format="%Y-%m-%dT%H:%M",
                             attrs={
                                 "type": "datetime-local",
-                                "min": f"{minimum_date}T00:00",
-                            }
+                                "step": "60",
+                                "min": minimum_datetime,
+                            },
                         ),
                     )
-                elif normalized_label.startswith("fecha"):
+                elif (
+                    normalized_label == "fecha"
+                    or normalized_label.startswith("fecha ")
+                    or normalized_label.startswith("fecha(")
+                ):
                     self.fields[f"detail_{index}"] = forms.DateField(
                         label=field_label,
                         input_formats=["%Y-%m-%d"],
@@ -139,25 +143,23 @@ class RequestCreateForm(forms.Form):
         if self.selected_procedure and chosen != self.selected_procedure:
             self.add_error("procedure", "Selecciona un procedimiento válido.")
         if self.selected_procedure:
+            now = timezone.now()
             today = timezone.localdate()
             for index, _label in enumerate(self.selected_procedure.fields):
                 field_name = f"detail_{index}"
                 value = cleaned_data.get(field_name)
-                if isinstance(value, datetime):
-                    request_date = (
-                        timezone.localtime(value).date()
-                        if timezone.is_aware(value)
-                        else value.date()
-                    )
-                elif isinstance(value, date):
-                    request_date = value
-                else:
-                    continue
-                if request_date < today:
-                    self.add_error(
-                        field_name,
-                        "⚠ No puedes seleccionar una fecha anterior a hoy.",
-                    )
+                field = self.fields[field_name]
+                if isinstance(field, forms.DateTimeField) and value is not None:
+                    if value < now:
+                        self.add_error(
+                            field_name,
+                            "La fecha y hora no pueden ser anteriores al momento actual.",
+                        )
+                elif isinstance(field, forms.DateField) and value is not None:
+                    if value < today:
+                        self.add_error(
+                            field_name, "La fecha no puede ser anterior a hoy."
+                        )
         return cleaned_data
 
     def detail_values(self):
@@ -186,5 +188,14 @@ class RequestDecisionForm(forms.Form):
     rejection_reason = forms.CharField(
         required=False,
         label="Motivo del rechazo (opcional)",
+        max_length=2000,
+        strip=True,
+        error_messages={
+            "max_length": "El motivo no puede superar los 2000 caracteres."
+        },
         widget=forms.Textarea(attrs={"rows": 2}),
     )
+
+    def clean_rejection_reason(self):
+        reason = self.cleaned_data["rejection_reason"]
+        return reason or None
